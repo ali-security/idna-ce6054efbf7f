@@ -158,8 +158,10 @@ def valid_contextj(label, pos):
             joining_type = idnadata.joining_types.get(ord(label[i]))
             if joining_type == ord('T'):
                 continue
-            if joining_type in [ord('L'), ord('D')]:
+            elif joining_type in [ord('L'), ord('D')]:
                 ok = True
+                break
+            else:
                 break
 
         if not ok:
@@ -170,8 +172,10 @@ def valid_contextj(label, pos):
             joining_type = idnadata.joining_types.get(ord(label[i]))
             if joining_type == ord('T'):
                 continue
-            if joining_type in [ord('R'), ord('D')]:
+            elif joining_type in [ord('R'), ord('D')]:
                 ok = True
+                break
+            else:
                 break
         return ok
 

@@ -183,6 +183,62 @@ class IDNATests(unittest.TestCase):
         self.assertFalse(idna.valid_contextj(latin + zwj, 1)) # No preceding Virama
         self.assertTrue(idna.valid_contextj(virama + zwj, 1)) # Preceding Virama
 
+    def test_valid_contextj_joining_types(self):
+
+        zwnj = u'\u200c'
+        dual = u'\u0628'        # ARABIC LETTER BEH, Joining_Type D
+        right = u'\u0627'       # ARABIC LETTER ALEF, Joining_Type R
+        transparent = u'\u064e' # ARABIC FATHA, Joining_Type T
+        non_joining = u'\u0621' # ARABIC LETTER HAMZA, Joining_Type U
+        latin = u'\u0061'
+
+        # RFC 5892 Appendix A.1 (Zero Width Non-Joiner)
+        # (Joining_Type:{L,D})(Joining_Type:T)*\u200c(Joining_Type:T)*(Joining_Type:{R,D})
+        self.assertTrue(idna.valid_contextj(dual + zwnj + dual, 1))
+        self.assertTrue(idna.valid_contextj(dual + zwnj + right, 1))
+        self.assertTrue(idna.valid_contextj(dual + transparent + zwnj + transparent + dual, 2))
+        self.assertTrue(idna.valid_contextj(dual + transparent + transparent + zwnj + right, 3))
+        self.assertFalse(idna.valid_contextj(right + zwnj + dual, 1))
+        self.assertFalse(idna.valid_contextj(dual + zwnj + latin, 1))
+
+        # Only transparent characters may separate the joiner from the joining characters
+        self.assertFalse(idna.valid_contextj(dual + right + zwnj + dual, 2))
+        self.assertFalse(idna.valid_contextj(dual + non_joining + zwnj + dual, 2))
+        self.assertFalse(idna.valid_contextj(dual + latin + zwnj + dual, 2))
+        self.assertFalse(idna.valid_contextj(dual + zwnj + non_joining + dual, 1))
+        self.assertFalse(idna.valid_contextj(dual + zwnj + latin + dual, 1))
+        self.assertFalse(idna.valid_contextj(dual + zwnj + zwnj + dual, 1))
+        self.assertFalse(idna.valid_contextj(dual + zwnj + zwnj + dual, 2))
+
+        # Joiner preceded by a transparent combining mark is still a valid label
+        label = dual + transparent + zwnj + dual
+        self.assertEqual(idna.decode(idna.encode(label)), label)
+
+    def test_valid_contextj_long_label(self):
+
+        # CVE-2024-3651: every joiner used to rescan the whole label looking for a
+        # joining character, making encode() quadratic in the size of the input.
+        class CountingDict(dict):
+            lookups = 0
+
+            def get(self, *args):
+                self.lookups += 1
+                return dict.get(self, *args)
+
+        label = u'\u0628' + u'\u200c' * 5000 + u'\u0628'
+        joining_types = idna.idnadata.joining_types
+        counting = CountingDict(joining_types)
+        idna.idnadata.joining_types = counting
+        try:
+            self.assertRaises(idna.IDNAError, idna.encode, label)
+            self.assertRaises(idna.IDNAError, idna.encode, label + u'.' + label)
+            self.assertRaises(idna.IDNAError, idna.encode, label, uts46=True)
+            self.assertRaises(idna.IDNAError, idna.check_label, label)
+        finally:
+            idna.idnadata.joining_types = joining_types
+        self.assertTrue(counting.lookups <= 4 * len(label),
+                        'valid_contextj made {0} joining type lookups'.format(counting.lookups))
+
     def test_valid_contexto(self):
 
         latin = u'\u0061'

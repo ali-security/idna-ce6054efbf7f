@@ -13,7 +13,7 @@ from intranges import intranges_from_list
 UNICODE_VERSION = '6.3.0'
 
 SCRIPTS_URL = "http://www.unicode.org/Public/{version}/ucd/Scripts.txt"
-JOININGTYPES_URL = "http://www.unicode.org/Public/{version}/ucd/ArabicShaping.txt"
+JOININGTYPES_URL = "http://www.unicode.org/Public/{version}/ucd/extracted/DerivedJoiningType.txt"
 IDNATABLES_URL = "http://www.iana.org/assignments/idna-tables-{version}/idna-tables-{version}.xml"
 IDNATABLES_NS = "http://www.iana.org/assignments"
 
@@ -66,14 +66,23 @@ def build_idnadata(version):
     # Joining types are used by CONTEXTJ rule A.1
     #
     print("joining_types = {")
-    scripts = {}
+    joining_types = {}
     for line in urlopen(JOININGTYPES_URL.format(version=version)).readlines():
         line = line.decode('utf-8')
         line = line.strip()
         if not line or line[0] == '#':
             continue
-        (codepoint, name, joiningtype, group) = [x.strip() for x in line.split(';')]
-        print("    {0}: {1},".format(hex(int(codepoint, 16)), ord(joiningtype)))
+        if line.find('#'):
+            line = line.split('#')[0]
+        (codepoints, joiningtype) = [x.strip() for x in line.split(';')]
+        if codepoints.find('..') > 0:
+            (begin, end) = [int(x, 16) for x in codepoints.split('..')]
+        else:
+            begin = end = int(codepoints, 16)
+        for cp in range(begin, end+1):
+            joining_types[cp] = joiningtype
+    for cp in sorted(joining_types):
+        print("    {0}: {1},".format(hex(cp), ord(joining_types[cp])))
     print("}")
 
     #
