@@ -238,6 +238,16 @@ def check_label(label):
         label = label.decode('utf-8')
     if len(label) == 0:
         raise IDNAError('Empty Label')
+    # Reject oversized labels before per-codepoint validation runs.
+    # CONTEXTJ/CONTEXTO checks scan the whole label per codepoint, so an
+    # uncapped label drives validation into quadratic time
+    # (GHSA-65pc-fj4g-8rjx). encode()/decode() cap the whole-domain
+    # length; this cap protects direct callers of alabel/ulabel/check_label
+    # and the incremental codec. Use the whole-domain bound rather than the
+    # per-label DNS bound so that UTS #46 lenient decoding of labels longer
+    # than 63 chars is preserved.
+    if not valid_string_length(label, trailing_dot=True):
+        raise IDNAError('Label too long')
 
     check_nfc(label)
     check_hyphen_ok(label)
@@ -342,6 +352,15 @@ def encode(s, strict=False, uts46=False, std3_rules=False, transitional=False):
         s = s.decode("ascii")
     if uts46:
         s = uts46_remap(s, std3_rules, transitional)
+
+    # Reject inputs that exceed the maximum DNS domain length up-front.
+    # Each codepoint in a U-label contributes at least one octet to its
+    # A-label form, so any input longer than the domain limit cannot
+    # produce a valid A-domain. Short-circuiting here prevents per-label
+    # validation from being driven into quadratic time
+    if len(s) > 254:
+        raise IDNAError('Domain too long')
+
     trailing_dot = False
     result = []
     if strict:
@@ -371,6 +390,11 @@ def decode(s, strict=False, uts46=False, std3_rules=False):
         s = s.decode("ascii")
     if uts46:
         s = uts46_remap(s, std3_rules, False)
+    # See encode() for rationale; the same bound applies because every
+    # legal A-domain is at most 254 octets and every codepoint of a
+    # legal U-domain contributes at least one octet to its A-form.
+    if len(s) > 254:
+        raise IDNAError('Domain too long')
     trailing_dot = False
     result = []
     if not strict:

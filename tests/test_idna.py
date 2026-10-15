@@ -84,6 +84,40 @@ class IDNATests(unittest.TestCase):
         self.assertFalse(idna.valid_label_length('a' * 64))
         self.assertRaises(idna.IDNAError, idna.encode, 'a' * 64)
 
+    def test_oversized_input_rejected_promptly(self):
+        # GHSA-65pc-fj4g-8rjx: encode/decode must reject inputs that
+        # exceed the maximum DNS domain length before per-codepoint
+        # validation runs, so labels dominated by CONTEXTO codepoints
+        # cannot drive validation into quadratic time.
+        import time
+
+        for payload in (u'\u0660' * 8000, u'\u30fb' * 8000 + u'\u6f22'):
+            start = time.time()
+            self.assertRaises(idna.IDNAError, idna.encode, payload)
+            self.assertRaises(idna.IDNAError, idna.decode, payload)
+            self.assertLess(time.time() - start, 1.0)
+
+    def test_oversized_label_rejected_promptly(self):
+        # The whole-domain cap in encode()/decode() does not cover direct
+        # callers of alabel/ulabel/check_label, nor the incremental codec
+        # which calls alabel per label. Without a per-label cap, a single
+        # oversized CONTEXTO-heavy label still drives validation into
+        # quadratic time.
+        import time
+
+        import idna.codec
+
+        payload = u'\u30fb' * 8000 + u'\u6f22'
+        punycode_payload = b'xn--' + payload.encode('punycode')
+        start = time.time()
+        self.assertRaises(idna.IDNAError, idna.check_label, payload)
+        self.assertRaises(idna.IDNAError, idna.alabel, payload)
+        self.assertRaises(idna.IDNAError, idna.ulabel, payload)
+        self.assertRaises(idna.IDNAError, idna.ulabel, punycode_payload)
+        self.assertRaises(idna.IDNAError,
+                          idna.codec.IncrementalEncoder().encode, payload, True)
+        self.assertLess(time.time() - start, 1.0)
+
     def test_check_bidi(self):
 
         l = u'\u0061'
