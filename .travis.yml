@@ -1,15 +1,16 @@
 language: python
+# Travis retired precise/trusty images; focal is the newest dist that still ships
+# python 2.7 archives. 2.6/3.3/3.4/pypy/3.7-dev have no archive on focal.
+dist: focal
 python:
-  - "2.6"
   - "2.7"
-  - "3.3"
-  - "3.4"
   - "3.5"
   - "3.6"
-  - "3.7-dev"
-  - "pypy"
+  - "3.7"
+  - "3.8"
 install:
+  # setuptools 72 removed the `setup.py test` command this suite is driven by.
+  - pip install "setuptools<72"
   - pip install .
 script:
   - python setup.py test
-

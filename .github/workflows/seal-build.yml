@@ -1,0 +1,26 @@
+name: seal-build
+on:
+  workflow_dispatch: {}
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      PIP_INDEX_URL: https://:2017-03-07T03:27:27.825414Z@time-machines-pypi.sealsecurity.io/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.7'
+      - name: Install release-era packaging toolchain
+        run: python -m pip install "setuptools==34.3.1" "wheel==0.26.0"
+      - name: Build sdist and wheel
+        run: |
+          python -c "import setuptools, wheel; print(setuptools.__version__, wheel.__version__)"
+          python setup.py sdist bdist_wheel
+          ls -l dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
